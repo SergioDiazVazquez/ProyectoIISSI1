@@ -21,30 +21,51 @@ END //
 DELIMITER 
 ;
 
--- TIEMPO MÁXIMO 60 DÍAS DE PRÉSTAMO DE UN LIBRO
+--  Inhabilitación de préstamos por impago por retraso
 
 DELIMITER //
-CREATE OR REPLACE TRIGGER tMaximo60diasPrestamo
+
+CREATE OR REPLACE TRIGGER tInhabilitacionPrestamos
 BEFORE INSERT ON prestamos
 FOR EACH ROW
-
 BEGIN
-	IF DATEDIFF(NEW.fechaDevolucion, NEW.fechaPrestamo) > 60 THEN
-	    SIGNAL SQLSTATE '45000'
-	    SET MESSAGE_TEXT = 'Un libro solo puede estar prestado hasta 60 días';
+	DECLARE multas_pendientes INT;
+	SELECT COUNT(*) INTO multas_pendientes
+	FROM multas
+	WHERE id_Usuario = NEW.id_usuario
+		AND multas.esPagada = 0;
+		
+	IF multas_pendientes > 0 THEN
+		SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'Un usuario no puede tener más de dos libros en préstamo.';
    END IF;
 END //
 
--- TIEMPO MÁXIMO 15 DÍAS DE PAGAR LA MULTA
+DELIMITER
+;
+
+-- Renovación limitada de préstamos
 
 DELIMITER //
-CREATE OR REPLACE TRIGGER tMaximo15diasMulta
-BEFORE INSERT ON multas
+
+CREATE OR REPLACE TRIGGER tRenovacionLimitada
+BEFORE INSERT ON prestamos
 FOR EACH ROW
 BEGIN
+	DECLARE ultimaFechaDevolucion DATE;
+	SELECT MAX(prestamos.fechaDevolucion) INTO fecha
+	FROM prestamos
+	WHERE id_Usuario = NEW.id_Usuario
+		AND id_Libro = NEW.id_Libro
+		AND esDevuelto = 1;
+	IF ultimaFechaDevolucion = CURDATE() THEN
+		SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'No puedes volver a tomar prestado el mismo libro';
+   END IF;
+		
+END //
 
+DELIMITER
+;
 
-
-
-DELIMITER ;
 
